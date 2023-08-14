@@ -9,16 +9,18 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.Stack;
 
 public class ESCG {
 
-	private static boolean		supportImgui	= false;
+	static boolean				supportImgui	= false;
 	private static boolean		manualImgui		= false;
 	private static List<String>	includes		= new ArrayList<>();
 
 	private static String		mainType;
+	private static String		outputName		= "escg";
 	private static File			importFile;
 	private static File			outputFile;
 	
@@ -217,6 +219,13 @@ public class ESCG {
 							String member = line.readEnumMember();
 							if(member == null) break;
 							enm.values.add(member);
+							// I'm not sure, but this should actually work
+							// without any additional effort
+							String friendlyName = itemBeingRead.friendlyName;
+							if(friendlyName == null) {
+								friendlyName = Utils.snakeToFriendly(Utils.toSnakeCase(member));
+							}
+							enm.friendlyNames.put(member, friendlyName);
 						}
 					}
 				} else {
@@ -420,18 +429,197 @@ public class ESCG {
 		//*/
 	}
 	
-	private static void writeImguiCode(CppWriter writer) {
-		// TODO implement
+	private static void writeImguiTab(String tabName,
+			List<SettingOrGroup> items, String containerPath, CppWriter writer)
+	{
+		writer.startLine().append("if(ImGui::BeginTabItem(\"").append(tabName);
+		writer.append("\")").openBracket().endLine();
+
+		writer.indent();
+		writeImguiGroupContent(items, containerPath, writer);
+		writer.startLine().append("ImGui::EndTabItem();").endLine();
+		writer.unindent();
+		
+		writer.startLine().append('}').endLine();
+	}
+	
+	private static void writeImguiSetting(Setting setting,
+			String containerPath, CppWriter writer)
+	{
+		String path = containerPath + setting.codeName;
+		UIType uiType = UIType.getType(setting);
+		String flags = "0";
+		switch(uiType) {
+			case CHECKBOX:
+				writer.startLine().append("ImGui::Checkbox(\"");
+				writer.append(setting.friendlyName).append("\", &");
+				writer.append(path).append(");").endLine();
+				break;
+			case TEXT:
+			case FILE:
+				// hopefully this works. a stack overflow answer with
+				// a passive aggressive "read the manual" comment suggested so.
+				// "read the manual" is such a bullshit thing to say for imgui
+				// when the """manual""" is just a bunch of comments in demo code
+				// As good as imgui is, it needs a real fucking manual
+				// when I want the answer to "how do I do x",
+				// I want to ctrl+f for keywords in a document,
+				// not crossreference a running program with
+				// a several thousand line long code file
+				// and hope it has my exact use case
+				// and possibly have to mangle things until they work 
+				writer.startLine().append("ImGui::InputText(\"");
+				writer.append(setting.friendlyName).append("\", &");
+				writer.append(path).append(");").endLine();
+				break;
+			case NUMBER:
+				writer.startLine().append("escgInputNumber(\"");
+				writer.append(setting.friendlyName).append("\", &");
+				writer.append(path).append(");").endLine();
+				break;
+			case LOGSLIDER:
+				flags = "ImGuiSliderFlags_Logarithmic";
+				// intentional fallthrough
+			case SLIDER:
+				writer.startLine().append("escgInputSlider(\"");
+				writer.append(setting.friendlyName).append("\", &");
+				writer.append(path).append(", ").append(setting.minValue);
+				writer.append(", ").append(setting.maxValue).append(", ");
+				writer.append(flags).append(");").endLine();
+				break;
+			case COMBOBOX:
+				writeEnumComboBox(setting, path, writer);
+				break;
+				
+		}
+	}
+	
+	private static void writeEnumComboBox(Setting setting,
+			String path, CppWriter writer)
+	{
+		CppEnum enm = CppEnum.BY_NAME.get(setting.cppType);
+		String mapName = "escgEnumV2F_" + enm.name;
+		
+		// combo if
+		writer.startLine().append("if(ImGui::BeginCombo(\"");
+		writer.append(setting.friendlyName).append("\", ");
+		writer.append(mapName).append('[').append(path).append("])");
+		writer.openBracket().endLine();
+		writer.indent();
+		
+		// foreach
+		writer.startLine().append("for(const auto& pair : ").append(mapName);
+		writer.append(')').openBracket().endLine();
+		writer.indent();
+		
+		// begin foreach contents
+		writer.startLine().append("const bool selected = ");
+		writer.append(path).append(" == pair.first;").endLine();
+		writer.append("if(ImGui::Selectable(pair.second.c_str(), selected)");
+		writer.openBracket().endLine();
+		writer.indent();
+		writer.startLine().append(path).append(" = pair.first;").endLine();
+		writer.unindent();
+		writer.startLine().append('}').endLine();
+		
+		writer.startLine().append("if(selected)").openBracket().endLine();
+		writer.indent();
+		writer.startLine().append("ImGui::SetItemDefaultFocus();").endLine();
+		writer.unindent();
+		writer.startLine().append('}').endLine();
+		// end foreach contents
+		
+		// end foreach
+		writer.unindent();
+		writer.startLine().append('}').endLine();
+		
+		// end combo if
+		writer.unindent();
+		writer.startLine().append('}').endLine();
+	}
+	
+	private static void writeImguiGroupContent(List<SettingOrGroup> items,
+			String containerPath, CppWriter writer)
+	{
+		for(SettingOrGroup item : items) {
+			if(item.uiType == UIType.NONE) continue;
+			
+			if(item.getClass() == Group.class) {
+				Group group = (Group) item;
+				
+				writer.startLine().append("if(ImGui::");
+				// despite all the group options listed and documented in UiType,
+				// only GROUP and TREE are currently supported
+				writer.append(group.uiType == UIType.GROUP ?
+						"CollapsingHeader" : "TreeNode");
+				writer.append("(\"").append(group.friendlyName).append("\"))");
+				writer.openBracket().endLine();
+				
+				String path = containerPath + group.codeName + '.';
+				writer.indent();
+				writeImguiGroupContent(group.items, path, writer);
+				writer.unindent();
+				writer.startLine().append('}').endLine();
+			} else {
+				writeImguiSetting((Setting) item, containerPath, writer);
+			}
+		}
+	}
+	
+	private static void writeImguiCode(Group main, CppWriter writer) {
+		writer.indent();
+		// technically should be List<Setting>,
+		// but it doesn't provide any benefit
+		// and just complicates the generic parameters
+		List<SettingOrGroup> filtered = main.visibleItems();
+		List<SettingOrGroup> general = new ArrayList<>(main.items.size());
+		// I'll keep the lambda for now in case I decide to go back to Streams
+		int mainCount = filtered.size();
+		filtered.forEach(item -> {
+			if(item.getClass() == Setting.class) {
+				general.add(item);
+			}
+		});
+		// don't create a general tab if there's no settings in the root object
+		boolean noGeneral = general.isEmpty();
+		// don't create tabs if there are no substructs,
+		// or if the root only consists of a single substruct
+		boolean useTabs = noGeneral ? mainCount > 1 : general.size() < mainCount;
+		if(useTabs) {
+			writer.startLine().append("ImGui::BeginTabBar(\"Tabs\")");
+			writer.openBracket().endLine();
+			writer.indent();
+			if(!noGeneral) {
+				writeImguiTab("General", general, "obj.", writer);
+			}
+			for(SettingOrGroup item : filtered) {
+				if(item.getClass() == Group.class) {
+					Group group = (Group) item;
+					String path = "obj." + group.codeName + '.';
+					writeImguiTab(group.friendlyName, group.visibleItems(), path, writer);
+				}
+			}
+			writer.startLine().append("ImGui::EndTabBar();").endLine();
+			writer.unindent();
+			writer.startLine().append('}').endLine();
+		} else {
+			if(noGeneral) {
+				// !useTabs && noGeneral dictates main.items consisnts of
+				// a single Group object and nothing else
+				Group group = (Group) main.items.get(0);
+				String path = "obj." + group.codeName + '.';
+				writeImguiGroupContent(group.items, path, writer);
+			} else {
+				// !useTabs && !noGeneral dictates main.items only consists settings
+				writeImguiGroupContent(general, "obj.", writer);
+			}
+		}
+		writer.unindent();
 	}
 	
 	private static final String PRAGMA_ESCG = "#pragma escg(";
 	
-	private static void createCppFile() throws IOException {
-		Group main = Group.BY_NAME.get(mainType);
-		if(main == null) {
-			System.err.println("C++ file parsed did not contain the type indicated");
-			return;
-		}
+	private static void createCppFile(Group main) throws IOException {
 		
 		String template = Files.readString(new File("code_template.cpp").toPath());
 		CppWriter writer = new CppWriter();
@@ -488,7 +676,7 @@ public class ESCG {
 				case "imgui":
 					writer.indent().indent();
 					if(supportImgui) {
-						writeImguiCode(writer);
+						writeImguiCode(main, writer);
 					} else {
 						writer.startLine().append("// imgui code excluded. add an imgui import to include it");
 					}
@@ -525,9 +713,10 @@ public class ESCG {
 			return;
 		}
 		
-		outputFile = new File(importFile.getParentFile(), "escg.cpp");
+		File dir = importFile.getParentFile();
+		outputFile = new File(dir, outputName + ".cpp");
 		try {
-			createCppFile();
+			createCppFile(main);
 		} catch(IOException e) {
 			e.printStackTrace();
 			return;

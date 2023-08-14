@@ -58,6 +58,10 @@ public class CppWriter {
 		return this;
 	}
 	
+	/**
+	 * Adds an opening bracket, starting a new line first if the code style dictates it.<br>
+	 * No new line is added after the bracket.
+	 */
 	public CppWriter openBracket() {
 		if(newlineBrackets) {
 			endLine().startLine();

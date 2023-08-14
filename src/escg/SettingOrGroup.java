@@ -78,7 +78,7 @@ public class SettingOrGroup {
 		this.codeName = codeName;
 		jsonName = Utils.toSnakeCase(codeName);
 		if(friendlyName == null) {
-			friendlyName = Utils.snakeToTitleCase(jsonName);
+			friendlyName = Utils.snakeToFriendly(jsonName);
 		}
 	}
 }

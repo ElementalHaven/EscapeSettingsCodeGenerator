@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Group extends SettingOrGroup {
+public final class Group extends SettingOrGroup {
 	static final Map<String, Group>	BY_NAME			= new HashMap<>();
 
 	public List<SettingOrGroup>		items			= new ArrayList<>();
@@ -192,5 +192,16 @@ public class Group extends SettingOrGroup {
 				}
 			}
 		}
+	}
+	
+	public List<SettingOrGroup> visibleItems() {
+		// this is the easiest way
+		// without turning everything into a pile of lambdas
+		// or forcing the Java version clear up to 16
+		List<SettingOrGroup> filtered = new ArrayList<>(items.size());
+		for(SettingOrGroup item : items) {
+			if(item.uiType != UIType.NONE) filtered.add(item);
+		}
+		return filtered;
 	}
 }

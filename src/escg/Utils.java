@@ -22,7 +22,7 @@ public class Utils {
 		return sb.toString();
 	}
 	
-	public static String snakeToTitleCase(String token) {
+	public static String snakeToFriendly(String token) {
 		StringBuilder sb = new StringBuilder();
 		final int len = token.length();
 		// start out acting as if there was a previous space

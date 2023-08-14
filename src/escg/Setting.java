@@ -1,6 +1,6 @@
 package escg;
 
-public class Setting extends SettingOrGroup {
+public final class Setting extends SettingOrGroup {
 	/**
 	 * Autodetermined from the C++ type in the member declaration<br>
 	 * Used to decide the appropriate type of functions to use for validation.

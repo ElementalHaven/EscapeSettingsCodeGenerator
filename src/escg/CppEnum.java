@@ -10,6 +10,7 @@ public class CppEnum {
 	static final Map<String, CppEnum>	BY_NAME	= new HashMap<>();
 	
 	static void writeAll(CppWriter writer) {
+		// FIXME this needs restricted to only enums used
 		boolean wroteSomething = false;
 		for(CppEnum enm : BY_NAME.values()) {
 			// put an empty line between each enum
@@ -17,6 +18,9 @@ public class CppEnum {
 			
 			enm.createMaps(writer);
 			wroteSomething = true;
+		}
+		if(!wroteSomething) {
+			writer.append("// No enums were included");
 		}
 	}
 

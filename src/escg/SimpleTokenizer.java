@@ -28,11 +28,10 @@ public class SimpleTokenizer {
 	
 	boolean startsWithComment() {
 		int commentStart = line.indexOf("//");
-		boolean startsWith = commentStart == 0;
-		if(!startsWith) {
+		if(commentStart > 0) {
 			line = line.substring(0, commentStart);
 		}
-		return startsWith;
+		return commentStart == 0;
 	}
 	
 	boolean hasBadCharacters() {

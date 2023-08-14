@@ -55,7 +55,7 @@ public final class Group extends SettingOrGroup {
 		writer.indent();
 		writeReaderCode(writer, "jsonIn", "structOut");
 		writer.unindent();
-		writer.startLine().append('}').endLine();
+		writer.startLine().append('}');
 	}
 	
 	public void writeReaderCode(CppWriter writer, String jsonVarName, String structName) {
@@ -64,11 +64,7 @@ public final class Group extends SettingOrGroup {
 		}
 
 		if(!items.isEmpty()) {
-			// TODO need subitem names
-			// I don't know if the above tag is still applicable
-			// I'll need to test the code out to find out -Liz (8/12/23)
-			
-			writer.append("for(nlohmann::json::iterator it = ");
+			writer.startLine().append("for(nlohmann::json::iterator it = ");
 			writer.append(jsonVarName).append(".begin(); it != ");
 			writer.append(jsonVarName).append(".end(); ++it)");
 			writer.openBracket().endLine();
@@ -89,6 +85,8 @@ public final class Group extends SettingOrGroup {
 						writer.append(' ');
 					}
 					writer.append("else ");
+				} else {
+					writer.startLine();
 				}
 				writer.append("if(key == \"").append(item.jsonName);
 				writer.append("\")").openBracket().endLine();
@@ -102,7 +100,7 @@ public final class Group extends SettingOrGroup {
 					setting.writerReaderCode(writer, "val", memberName);
 				}
 				writer.unindent();
-				writer.startLine().append('}').endLine();
+				writer.startLine().append('}');
 				
 				checkedForASetting = true;
 			}

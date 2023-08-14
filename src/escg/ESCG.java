@@ -16,7 +16,9 @@ import java.util.Stack;
 public class ESCG {
 
 	static boolean				supportImgui	= false;
+	static boolean				supportImguiStd	= false;
 	private static boolean		manualImgui		= false;
+	private static boolean		includeImport	= true;
 	private static List<String>	includes		= new ArrayList<>();
 
 	private static String		mainType;
@@ -93,7 +95,16 @@ public class ESCG {
 			case "include":
 				if(isValidHeaderDeclaration(value)) {
 					includes.add(value);
-					if(value.toLowerCase().contains("imgui")) supportImgui = true;
+					String lower = value.toLowerCase();
+					if(lower.contains("imgui")) {
+						if(lower.contains("stdlib")) {
+							supportImguiStd = true;
+						} else {							
+							supportImgui = true;
+						}
+					}
+					// don't include the scanned file twice
+					if(lower.contains(importFile.getName().toLowerCase())) includeImport = false;
 				} else {
 					System.err.println("Invalid include declaration: " + value + ". Must be enclosed in brackets or quotes");
 				}
@@ -104,23 +115,36 @@ public class ESCG {
 	}
 	
 	private static void parsePotentialProperty(Setting setting, String comment) {
-		String meta = comment.substring(2).trim();
+		String meta = comment.substring(2);
 		int propEnd = meta.indexOf(':');
 		if(propEnd != -1) {
-			String prop = meta.substring(0, propEnd).toLowerCase();
+			String prop = meta.substring(0, propEnd).trim().toLowerCase();
 			String value = meta.substring(propEnd + 1).trim();
 			handleProperty(prop, value, setting);
 		}
 	}
 	
 	private static void writeIncludesAndDefines(CppWriter writer) {
+		boolean wroteAnInclude = false;
+		if(includeImport) { 
+			writer.append("#include \"").append(importFile.getName());
+			writer.append('"').endLine();
+			wroteAnInclude = true;
+		}
 		for(String include : includes) {
 			writer.append("#include ").append(include).endLine();
+			wroteAnInclude = true;
 		}
+		if(wroteAnInclude) writer.endLine();
 		if(supportImgui && !manualImgui) {
-			writer.append("#define ESCG_IMGUI").endLine();
+			if(!manualImgui) {
+				writer.append("#define ESCG_IMGUI").endLine();
+			}
+			if(supportImguiStd) {
+				writer.append("#define ESCG_IMGUI_STD").endLine();
+			}
 		}
-		writer.append("#define ESCG_MAIN_TYPE ").append(mainType).endLine();
+		writer.append("#define ESCG_MAIN_TYPE ").append(mainType);
 	}
 	
 	static void importStructs() {
@@ -410,7 +434,7 @@ public class ESCG {
 				group.getDependencies(dependencies);
 				if(writtenTypes.containsAll(dependencies)) {
 					// put an empty line between each struct
-					if(wroteAStruct) writer.endLine();
+					if(wroteAStruct) writer.endLine().endLine();
 					
 					group.writeReaderMethod(writer);
 					
@@ -433,7 +457,7 @@ public class ESCG {
 			List<SettingOrGroup> items, String containerPath, CppWriter writer)
 	{
 		writer.startLine().append("if(ImGui::BeginTabItem(\"").append(tabName);
-		writer.append("\")").openBracket().endLine();
+		writer.append("\"))").openBracket().endLine();
 
 		writer.indent();
 		writeImguiGroupContent(items, containerPath, writer);
@@ -446,6 +470,7 @@ public class ESCG {
 	private static void writeImguiSetting(Setting setting,
 			String containerPath, CppWriter writer)
 	{
+		// FIXME add description support
 		String path = containerPath + setting.codeName;
 		UIType uiType = UIType.getType(setting);
 		String flags = "0";
@@ -457,17 +482,6 @@ public class ESCG {
 				break;
 			case TEXT:
 			case FILE:
-				// hopefully this works. a stack overflow answer with
-				// a passive aggressive "read the manual" comment suggested so.
-				// "read the manual" is such a bullshit thing to say for imgui
-				// when the """manual""" is just a bunch of comments in demo code
-				// As good as imgui is, it needs a real fucking manual
-				// when I want the answer to "how do I do x",
-				// I want to ctrl+f for keywords in a document,
-				// not crossreference a running program with
-				// a several thousand line long code file
-				// and hope it has my exact use case
-				// and possibly have to mangle things until they work 
 				writer.startLine().append("ImGui::InputText(\"");
 				writer.append(setting.friendlyName).append("\", &");
 				writer.append(path).append(");").endLine();
@@ -586,7 +600,7 @@ public class ESCG {
 		// or if the root only consists of a single substruct
 		boolean useTabs = noGeneral ? mainCount > 1 : general.size() < mainCount;
 		if(useTabs) {
-			writer.startLine().append("ImGui::BeginTabBar(\"Tabs\")");
+			writer.startLine().append("if(ImGui::BeginTabBar(\"Tabs\"))");
 			writer.openBracket().endLine();
 			writer.indent();
 			if(!noGeneral) {
@@ -630,7 +644,8 @@ public class ESCG {
 		for(String line : lines) {
 			if(hadPrevLine) writer.endLine();
 			
-			String replacement = null;
+			// has to be non-null so the switch statement works
+			String replacement = "DUMMY_TEXT";
 			if(!line.isEmpty() && line.charAt(0) == '#') {
 				if(line.startsWith(PRAGMA_ESCG)) {
 					int idx = line.indexOf(')');
@@ -640,8 +655,16 @@ public class ESCG {
 				}
 				
 				// allow imgui to be supported 
-				if(line.startsWith("#include ") && line.toLowerCase().contains("imgui")) {
-					supportImgui = true;
+				if(line.startsWith("#include ")) {
+					String lower = line.toLowerCase();
+					if(lower.contains("imgui")) {
+						if(lower.contains("stdlib")) {
+							supportImguiStd = true;
+						} else {							
+							supportImgui = true;
+						}
+					}
+					if(lower.contains(importFile.getName().toLowerCase())) includeImport = false;
 				}
 				
 				if(line.startsWith("#define ESCG_IMGUI")) {
@@ -662,7 +685,7 @@ public class ESCG {
 				case "serialize":
 				case "write":
 					writer.indent().indent();
-					main.writeWriterCode(writer, "obj", false);
+					main.writeWriterCode(writer, "obj.", false);
 					writer.unindent().unindent();
 					break;
 				case "deserialize":
@@ -674,13 +697,11 @@ public class ESCG {
 					CppEnum.writeAll(writer);
 					break;
 				case "imgui":
-					writer.indent().indent();
 					if(supportImgui) {
 						writeImguiCode(main, writer);
 					} else {
 						writer.startLine().append("// imgui code excluded. add an imgui import to include it");
 					}
-					writer.unindent().unindent();
 					break;
 				default:
 					writer.append(line);

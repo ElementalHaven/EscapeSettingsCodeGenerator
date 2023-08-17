@@ -60,7 +60,7 @@ public class CppWriter {
 	
 	/**
 	 * Adds an opening bracket, starting a new line first if the code style dictates it.<br>
-	 * No new line is added after the bracket.
+	 * No line separator is added after the bracket.
 	 */
 	public CppWriter openBracket() {
 		if(newlineBrackets) {
@@ -70,6 +70,16 @@ public class CppWriter {
 		}
 		append('{');
 		return this;
+	}
+	
+	/**
+	 * Reduces indentation and then fully creates a line
+	 * consisting of only a closing bracket.<br>
+	 * It is assumed that any previous line was already finished.
+	 * A line separator is added after the bracket.
+	 */
+	public CppWriter closeBracketLine() {
+		return unindent().startLine().append('}').endLine();
 	}
 	
 	public CppWriter reference() {

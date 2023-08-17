@@ -48,6 +48,9 @@ public class ESCG {
 			// imgui_stdlib includes imgui, so both are valid
 			supportImgui = true;
 		}
+		if(lower.contains("nlohmann") || lower.contains("json")) {
+			nlohmannHeader = include;
+		}
 		if("<filesystem>".equals(lower)) supportFilesystem = true;
 		
 		// don't include the scanned file twice
@@ -208,20 +211,22 @@ public class ESCG {
 			writer.append("#include ").append(include).endLine();
 		}
 		for(String path : io.unimportedFiles) {
-			writer.append("#include \"").append(path).append('"').endLine();
+			writer.append("#include ").append(path).endLine();
 		}
 	}
 	
 	private static void writeIncludesAndDefines(IOGrouping io) {
 		CppWriter writer = io.writer;
-		writer.append("#include \"").append(io.outputName).append(".h\"").endLine();
-		writer.endLine();
+		writer.append("#include \"").append(io.outputName).append(".h\"");
 		if(supportImgui && !manualImgui) {
+			writer.endLine();
 			if(!manualImgui) {
-				writer.append("#define ESCG_IMGUI").endLine();
+				writer.endLine();
+				writer.append("#define ESCG_IMGUI");
 			}
 			if(supportImguiStd) {
-				writer.append("#define ESCG_IMGUI_STD").endLine();
+				writer.endLine();
+				writer.append("#define ESCG_IMGUI_STD");
 			}
 		}
 		// main type not going to be a thing anymore
@@ -243,8 +248,13 @@ public class ESCG {
 			SimpleTokenizer line = new SimpleTokenizer();
 			
 			boolean clearSettings = false;
+			int lineNo = 0;
 			while(scanner.hasNextLine()) {
-				line.setLine(scanner.nextLine());
+				// exists for debugging purposes
+				String initialLine = scanner.nextLine();
+				lineNo++;
+				
+				line.setLine(initialLine);
 				// empty lines are useless
 				if(line.isEmpty()) {
 					clearSettings = true;
@@ -283,8 +293,13 @@ public class ESCG {
 						default:
 							if(token.startsWith("friend")) continue;
 							if(token.startsWith("}")) {
-								Group finishedItem = hierarchy.pop();
 								int semicolon = token.indexOf(';');
+								// we read an inline/template method end
+								// for the love of god,
+								// don't stick useless semicolons after them
+								if(semicolon == -1) continue;
+								
+								Group finishedItem = hierarchy.pop();
 								token = token.substring(1, semicolon).trim();
 								if(!token.isEmpty()) {
 									// if there was something in the middle,
@@ -410,8 +425,7 @@ public class ESCG {
 			writer.append("(data, obj);").endLine().endLine();
 			writer.startLine().append("return true;").endLine();
 			
-			writer.unindent();
-			writer.startLine().append('}').endLine();
+			writer.closeBracketLine();
 
 			wroteAMethod = true;
 		}
@@ -426,9 +440,8 @@ public class ESCG {
 		writer.indent();
 		writeImguiGroupContent(items, containerPath, writer);
 		writer.startLine().append("ImGui::EndTabItem();").endLine();
-		writer.unindent();
-		
-		writer.startLine().append('}').endLine();
+
+		writer.closeBracketLine();
 	}
 	
 	private static void writeImguiSetting(Setting setting,
@@ -497,23 +510,19 @@ public class ESCG {
 		writer.openBracket().endLine();
 		writer.indent();
 		writer.startLine().append(path).append(" = pair.first;").endLine();
-		writer.unindent();
-		writer.startLine().append('}').endLine();
+		writer.closeBracketLine();
 		
 		writer.startLine().append("if(selected)").openBracket().endLine();
 		writer.indent();
 		writer.startLine().append("ImGui::SetItemDefaultFocus();").endLine();
-		writer.unindent();
-		writer.startLine().append('}').endLine();
+		writer.closeBracketLine();
 		// end foreach contents
 		
 		// end foreach
-		writer.unindent();
-		writer.startLine().append('}').endLine();
+		writer.closeBracketLine();
 		
 		// end combo if
-		writer.unindent();
-		writer.startLine().append('}').endLine();
+		writer.closeBracketLine();
 	}
 	
 	private static void writeImguiGroupContent(List<SettingOrGroup> items,
@@ -536,8 +545,7 @@ public class ESCG {
 				String path = containerPath + group.codeName + '.';
 				writer.indent();
 				writeImguiGroupContent(group.items, path, writer);
-				writer.unindent();
-				writer.startLine().append('}').endLine();
+				writer.closeBracketLine();
 			} else {
 				writeImguiSetting((Setting) item, containerPath, writer);
 			}
@@ -545,14 +553,31 @@ public class ESCG {
 	}
 	
 	private static void writeImguiCode(IOGrouping io) {
+		CppWriter writer = io.writer;
+		boolean wroteAMethod = false;
 		for(String type : io.mainTypes) {
+			if(wroteAMethod) writer.endLine();
+			
 			Group group = Group.BY_NAME.get(type);
-			writeImguiCode(group, io.writer);
+
+			writer.startLine().append("void escgShowUI(").append(type);
+			writer.reference().append("obj, bool* open)").openBracket().endLine();
+			writer.indent();
+			writer.startLine().append("if(!ImGui::Begin(\"Settings\", open))");
+			writer.openBracket().endLine();
+			writer.indent();
+			writer.startLine().append("ImGui::End();").endLine();
+			writer.startLine().append("return;").endLine();
+			writer.closeBracketLine().endLine();
+			
+			writeImguiCode(group, writer);
+			
+			writer.startLine().append("ImGui::End();").endLine();
+			writer.closeBracketLine();
 		}
 	}
 	
 	private static void writeImguiCode(Group main, CppWriter writer) {
-		writer.indent();
 		// technically should be List<Setting>,
 		// but it doesn't provide any benefit
 		// and just complicates the generic parameters
@@ -585,8 +610,7 @@ public class ESCG {
 				}
 			}
 			writer.startLine().append("ImGui::EndTabBar();").endLine();
-			writer.unindent();
-			writer.startLine().append('}').endLine();
+			writer.closeBracketLine();
 		} else {
 			if(noGeneral) {
 				// !useTabs && noGeneral dictates main.items consisnts of
@@ -599,7 +623,6 @@ public class ESCG {
 				writeImguiGroupContent(general, "obj.", writer);
 			}
 		}
-		writer.unindent();
 	}
 	
 	private static void writeWriterCode(IOGrouping io) {
@@ -621,8 +644,7 @@ public class ESCG {
 			writer.unindent();
 			writer.startLine().append("};").endLine();
 			writer.startLine().append("return ret;").endLine();
-			writer.unindent();
-			writer.startLine().append('}').endLine();
+			writer.closeBracketLine();
 			writer.endLine();
 			
 			// method to write to file
@@ -631,10 +653,9 @@ public class ESCG {
 			writer.append("obj)").openBracket().endLine();
 			writer.indent();
 			writer.startLine().append("nlohmann::json data = escgToJson(obj);").endLine();
-			writer.startLine().append("td::ofstream stream(path);").endLine();
+			writer.startLine().append("std::ofstream stream(path);").endLine();
 			writer.startLine().append("stream << data;").endLine();
-			writer.unindent();
-			writer.startLine().append('}').endLine();
+			writer.closeBracketLine();
 			writer.endLine();
 		}
 	}
@@ -743,9 +764,10 @@ public class ESCG {
 		} else {
 			writer.append("#include ").append(nlohmannHeader).endLine();
 		}
-		writer.endLine();
 		
 		for(String mainType : io.mainTypes) {
+			writer.endLine();
+			
 			writer.append("// ").append(mainType).append(" -----------").endLine();
 			
 			writer.append("nlohmann::json escgToJson(const ").append(mainType);
@@ -757,11 +779,14 @@ public class ESCG {
 			writer.append("bool escgReadFromFile(const ").append(pathType).reference();
 			writer.append("filename, ").append(mainType).reference().append("obj);").endLine();
 			
-			writer.append("void escgRead_").append(mainType).append("nlohmann::json");
+			writer.append("void escgRead_").append(mainType).append("(nlohmann::json");
 			writer.reference().append("jsonIn, ").append(mainType).reference();
 			writer.append("structOut);").endLine();
 			
-			writer.endLine();
+			if(supportImgui) {
+				writer.append("void escgShowUI(").append(mainType).reference();
+				writer.append("obj, bool* open = nullptr);").endLine();
+			}
 		}
 		Files.writeString(io.outputHeader.toPath(), writer.toString());
 	}

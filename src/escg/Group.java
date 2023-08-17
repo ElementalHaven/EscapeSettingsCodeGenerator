@@ -138,7 +138,6 @@ public final class Group extends SettingOrGroup {
 						writer.endLine();
 						writer.indent();
 						group.writeWriterCode(writer, cppName + '.', false);
-						writer.endLine();
 						writer.unindent();
 						writer.startLine();
 					}

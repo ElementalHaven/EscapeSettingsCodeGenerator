@@ -54,7 +54,7 @@ public class IOGrouping {
 		
 		// add potential imports in case the user doesn't manually specify them
 		for(File f : inputFiles) {
-			String path = f.toPath().relativize(dir).toString();
+			String path = dir.relativize(f.toPath()).toString();
 			// No Windows paths. Period.
 			path.replace('\\', '/');
 			unimportedFiles.add('"' + path + '"');

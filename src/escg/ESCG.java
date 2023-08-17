@@ -218,20 +218,16 @@ public class ESCG {
 	private static void writeIncludesAndDefines(IOGrouping io) {
 		CppWriter writer = io.writer;
 		writer.append("#include \"").append(io.outputName).append(".h\"");
+		writer.endLine();
 		if(supportImgui && !manualImgui) {
 			writer.endLine();
 			if(!manualImgui) {
-				writer.endLine();
-				writer.append("#define ESCG_IMGUI");
+				writer.append("#define ESCG_IMGUI").endLine();
 			}
 			if(supportImguiStd) {
-				writer.endLine();
-				writer.append("#define ESCG_IMGUI_STD");
+				writer.append("#define ESCG_IMGUI_STD").endLine();
 			}
 		}
-		// main type not going to be a thing anymore
-		// as there will be the possibility of multiple main types
-		//writer.append("#define ESCG_MAIN_TYPE ").append(mainType);
 	}
 	
 	static void importStructs(IOGrouping io) {
@@ -394,12 +390,10 @@ public class ESCG {
 	
 	private static void writeConvenienceReaders(IOGrouping io) {
 		CppWriter writer = io.writer;
-		writer.endLine();
 		String pathType = getPathType();
-		boolean wroteAMethod = false;
 		for(String type : io.mainTypes) {
 			// put an empty line between each method
-			if(wroteAMethod) io.writer.endLine().endLine();
+			io.writer.endLine().endLine();
 
 			writer.startLine().append("bool escgReadFromFile(const ");
 			writer.append(pathType).reference().append("filename, ").append(type);
@@ -426,8 +420,6 @@ public class ESCG {
 			writer.startLine().append("return true;").endLine();
 			
 			writer.closeBracketLine();
-
-			wroteAMethod = true;
 		}
 	}
 	
@@ -656,7 +648,6 @@ public class ESCG {
 			writer.startLine().append("std::ofstream stream(path);").endLine();
 			writer.startLine().append("stream << data;").endLine();
 			writer.closeBracketLine();
-			writer.endLine();
 		}
 	}
 	
@@ -703,6 +694,7 @@ public class ESCG {
 				}
 			}
 			
+			hadPrevLine = false;
 			switch(replacement) {
 				case "includes":
 					writeIncludesAndDefines(files);
@@ -718,7 +710,7 @@ public class ESCG {
 					break;
 				case "enum":
 				case "enums":
-					CppEnum.writeAll(writer);
+					CppEnum.writeAll(files);
 					break;
 				case "imgui":
 					if(supportImgui) {
@@ -729,10 +721,9 @@ public class ESCG {
 					break;
 				default:
 					writer.append(line);
+					hadPrevLine = true;
 					break;
 			}
-			
-			hadPrevLine = true;
 		}
 		
 		Files.writeString(files.outputFile.toPath(), writer.toString());

@@ -9,18 +9,19 @@ import java.util.Map;
 public class CppEnum {
 	static final Map<String, CppEnum>	BY_NAME	= new HashMap<>();
 	
-	static void writeAll(CppWriter writer) {
-		// FIXME this needs restricted to only enums used
-		boolean wroteSomething = false;
-		for(CppEnum enm : BY_NAME.values()) {
-			// put an empty line between each enum
-			if(wroteSomething) writer.endLine();
-			
-			enm.createMaps(writer);
-			wroteSomething = true;
-		}
-		if(!wroteSomething) {
-			writer.append("// No enums were included");
+	static void writeAll(IOGrouping io) {
+		CppWriter writer = io.writer;
+		List<String> toHandle = io.enumsToExport;
+		if(toHandle.isEmpty()) {
+			writer.append("// No enums were included").endLine();
+		} else {
+			for(String enumName : toHandle) {
+				CppEnum enm = CppEnum.BY_NAME.get(enumName);
+				enm.createMaps(writer);
+				
+				// put an empty line between each enum
+				writer.endLine();
+			}
 		}
 	}
 

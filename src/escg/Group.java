@@ -166,27 +166,32 @@ public final class Group extends SettingOrGroup {
 		return items.isEmpty();
 	}
 	
+	private void addDependency(String type, List<String> out) {
+		if(type != null && out != null && !out.contains(type)) {
+			out.add(type);
+		}
+	}
+	
 	/**
 	 * Get a list of structs/classes that need to be declared before this one
 	 * So that it can properly compile.
-	 * @param dependencies A list to store the dependencies in
+	 * @param typeDependencies A list to store the dependencies in
 	 */
-	public void getDependencies(List<String> dependencies) {
+	public void getDependencies(List<String> typeDependencies, List<String> enumDependencies) {
 		// Add superclass dependencies
 		for(Group group : parentTypes) {
-			group.getDependencies(dependencies);
-			String type = group.typeName;
-			if(type != null && !dependencies.contains(type)) {
-				dependencies.add(type);
-			}
+			group.getDependencies(typeDependencies, enumDependencies);
+			addDependency(group.typeName, typeDependencies);
 		}
 		
 		for(SettingOrGroup item : items) {
 			if(item.getClass() == Group.class) {
 				Group group = (Group) item;
-				String type = group.typeName;
-				if(type != null && !dependencies.contains(type)) {
-					dependencies.add(type);
+				addDependency(group.typeName, typeDependencies);
+			} else {
+				Setting setting = (Setting) item;
+				if(setting.javaType == Enum.class) {
+					addDependency(setting.cppType, enumDependencies);
 				}
 			}
 		}

@@ -1,44 +1,67 @@
 package escg;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+
 import java.nio.file.Files;
+
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 import java.util.Stack;
 
 public class ESCG {
 
-	static boolean				supportImgui	= false;
-	static boolean				supportImguiStd	= false;
-	private static boolean		manualImgui		= false;
-	private static boolean		includeImport	= true;
-	private static List<String>	includes		= new ArrayList<>();
+	static boolean				supportImgui		= false;
+	static boolean				supportImguiStd		= false;
+	private static boolean		manualImgui			= false;
+	private static List<String>	includes			= new ArrayList<>();
 
-	private static String		mainType;
-	private static String		outputName		= "escg";
-	private static File			importFile;
-	private static File			outputFile;
-	
+	private static String		nlohmannHeader;
+	private static Boolean		newlineBrackets		= null;
+	private static Boolean		referenceBefore		= null;
+	private static boolean		supportFilesystem	= false;
+
 	/**
 	 * flag to indicate that all parsing of the input file should be temporarily halted.<br>
 	 * Exists so that the parser can be turned off for things that might break it
 	 */
-	private static boolean		noParse			= false;
+	private static boolean		noParse				= false;
+	
+	private static String getPathType() {
+		return supportFilesystem ? "std::filesystem::path" : "std::string";
+	}
 
-	private static boolean isValidHeaderDeclaration(String include) {
+	private static boolean isValidIncludeDeclaration(String include) {
 		char s = include.charAt(0);
 		char e = include.charAt(include.length() - 1);
 		return (s == '"' && e == '"') || (s == '<' && e == '>');
 	}
 	
-	private static void handleProperty(String prop, String value, Setting setting) {
+	private static void handleSpecialIncludes(String include, IOGrouping io) {
+		String lower = include.toLowerCase().replace('\\', '/');
+		if(lower.contains("imgui")) {
+			if(lower.contains("stdlib")) {
+				supportImguiStd = true;
+			}
+			// imgui_stdlib includes imgui, so both are valid
+			supportImgui = true;
+		}
+		if("<filesystem>".equals(lower)) supportFilesystem = true;
+		
+		// don't include the scanned file twice
+		Iterator<String> iter = io.unimportedFiles.iterator();
+		while(iter.hasNext()) {
+			String str = iter.next();
+			if(str.equalsIgnoreCase(lower)) {
+				iter.remove();
+				break;
+			}
+		}
+	}
+	
+	private static void handleProperty(String prop, String value, Setting setting, IOGrouping io) {
 		switch(prop) {
 			// combined ui and exclude
 			case "visibility":
@@ -93,49 +116,106 @@ public class ESCG {
 				setting.exclude = Utils.parseBoolean(value, setting.exclude);
 				break;
 			case "include":
-				if(isValidHeaderDeclaration(value)) {
+				if(isValidIncludeDeclaration(value)) {
 					includes.add(value);
-					String lower = value.toLowerCase();
-					if(lower.contains("imgui")) {
-						if(lower.contains("stdlib")) {
-							supportImguiStd = true;
-						} else {							
-							supportImgui = true;
-						}
-					}
-					// don't include the scanned file twice
-					if(lower.contains(importFile.getName().toLowerCase())) includeImport = false;
+					handleSpecialIncludes(value, io);
 				} else {
 					System.err.println("Invalid include declaration: " + value + ". Must be enclosed in brackets or quotes");
 				}
 				break;
 			case "parse":
 				noParse = !Utils.parseBoolean(value, !noParse);
+				break;
+			case "newline-brackets":
+			case "newline_brackets":
+			case "newlinebrackets":
+				newlineBrackets = Utils.parseBoolean(value, newlineBrackets);
+				break;
+			case "reference_before":
+			case "reference-before":
+			case "referencebefore":
+			case "ref-before":
+			case "ref_before":
+			case "refbefore":
+				referenceBefore = Utils.parseBoolean(value, referenceBefore);
+				break;
+			case "ref":
+			case "refs":
+			case "reference":
+			case "references":
+				value = value.toLowerCase();
+				switch(value) {
+					case "before":
+					case "type":
+					case "left":
+						referenceBefore = true;
+						break;
+					case "after":
+					case "name":
+					case "right":
+						referenceBefore = false;
+						break;
+				}
+				break;
+			case "bracket":
+			case "brackets":
+			case "openingbracket":
+			case "opening-bracket":
+			case "opening_bracket":
+			case "openingbrackets":
+			case "opening-brackets":
+			case "opening_brackets":
+				value = value.toLowerCase();
+				switch(value) {
+					case "newline":
+					case "new-line":
+					case "new line":
+					case "new_line":
+						newlineBrackets = true;
+						break;
+					case "sameline":
+					case "same-line":
+					case "same line":
+					case "same_line":
+						newlineBrackets = false;
+						break;
+				}
+				break;
+			case "filesystem":
+			case "std-filesystem":
+				supportFilesystem = Utils.parseBoolean(value, supportFilesystem);
+				break;
+			case "output":
+			case "outname":
+				io.outputName = value;
+				break;
 		}
 	}
 	
-	private static void parsePotentialProperty(Setting setting, String comment) {
+	private static void parsePotentialProperty(Setting setting, String comment, IOGrouping io) {
 		String meta = comment.substring(2);
 		int propEnd = meta.indexOf(':');
 		if(propEnd != -1) {
 			String prop = meta.substring(0, propEnd).trim().toLowerCase();
 			String value = meta.substring(propEnd + 1).trim();
-			handleProperty(prop, value, setting);
+			handleProperty(prop, value, setting, io);
 		}
 	}
 	
-	private static void writeIncludesAndDefines(CppWriter writer) {
-		boolean wroteAnInclude = false;
-		if(includeImport) { 
-			writer.append("#include \"").append(importFile.getName());
-			writer.append('"').endLine();
-			wroteAnInclude = true;
-		}
+	private static void writeHeaderIncludes(IOGrouping io) {
+		CppWriter writer = io.writer;
 		for(String include : includes) {
 			writer.append("#include ").append(include).endLine();
-			wroteAnInclude = true;
 		}
-		if(wroteAnInclude) writer.endLine();
+		for(String path : io.unimportedFiles) {
+			writer.append("#include \"").append(path).append('"').endLine();
+		}
+	}
+	
+	private static void writeIncludesAndDefines(IOGrouping io) {
+		CppWriter writer = io.writer;
+		writer.append("#include \"").append(io.outputName).append(".h\"").endLine();
+		writer.endLine();
 		if(supportImgui && !manualImgui) {
 			if(!manualImgui) {
 				writer.append("#define ESCG_IMGUI").endLine();
@@ -144,10 +224,18 @@ public class ESCG {
 				writer.append("#define ESCG_IMGUI_STD").endLine();
 			}
 		}
-		writer.append("#define ESCG_MAIN_TYPE ").append(mainType);
+		// main type not going to be a thing anymore
+		// as there will be the possibility of multiple main types
+		//writer.append("#define ESCG_MAIN_TYPE ").append(mainType);
 	}
 	
-	static void importStructs() {
+	static void importStructs(IOGrouping io) {
+		for(File f : io.inputFiles) {
+			importStructs(f, io);
+		}
+	}
+	
+	static void importStructs(File importFile, IOGrouping io) {
 		try(Scanner scanner = new Scanner(importFile)) {
 			Setting itemBeingRead = new Setting();
 			CppEnum enm = null;
@@ -171,7 +259,7 @@ public class ESCG {
 				boolean fullComment = line.startsWithComment();
 				String token = line.getRemaining();
 				if(fullComment) {
-					parsePotentialProperty(itemBeingRead, token);
+					parsePotentialProperty(itemBeingRead, token, io);
 					clearSettings = false;
 					continue;
 				}
@@ -208,11 +296,6 @@ public class ESCG {
 									if(parent != null && parent.currentlyPublic) {
 										parent.items.add(finishedItem);
 									}
-								} else {
-									// exit if we've read the main type
-									// we don't support pointers
-									// so everything needed to be read should have been read
-									if(mainType.equals(finishedItem.typeName)) return;
 								}
 								continue;
 							}
@@ -281,176 +364,57 @@ public class ESCG {
 		}
 	}
 	
-	// I've kinda given up on this implementation for the time being
-	// While parsing individual C++ tokens is more appropriate,
-	// it's WAY more effor than just reading line by line
-	// and scanning for specific useful tokens -Liz (8/12/23)
-	/*
-	public void importStructs() {
-		try(CppTokenReader reader = new CppTokenReader(new BufferedReader(new FileReader(importFile)))) {
-			Setting itemBeingRead = new Setting();
-			Group group = null;
-			CppEnum enm = null;
-			String namespace = null;
-			LinkedList<String> tokens = new LinkedList<>();
-			
-			// contains the currently being read struct and parent structs
-			List<Group> structNesting = new ArrayList<>();
-			// brackets to expect that will end the current item
-			// structs/classes are their own character that end when the item after them is closed
-			// that way blocks not tied to structures can be parsed properly 
-			List<Character> brackets = new ArrayList<>();
-			while(true) {
-				String token = reader.nextToken();
-				if(token == null) break;
-				
-				char firstChar = token.charAt(0);
-
-				if(firstChar == '/') {
-					// skip block comments
-					if(token.startsWith("/*")) continue;
-					
-					if(token.startsWith("//")) {
-						parsePotentialProperty(itemBeingRead, token);
-					}
-				}
-				
-				// preprocessor definitions
-				// for the love of god, please do not have conditional structs or stringify macros
-				// hell, leave out defines too. they might work as parameters. they might not
-				if(firstChar == '#') {
-					reader.skipLine();
-					continue;
-				}
-				
-				if(enm != null) {
-					enm.values.add(token);
-					tokens.clear();
-					reader.readToNextDelimiter(tokens);
-					String delim = tokens.removeLast();
-					if("}".equals(delim)) {
-						enm = null;
-					}
-				} else if(group != null) {
-					
-				} else {
-					switch(token) {
-						case "static":
-							break;
-						case "enum":
-							enm = new CppEnum();
-							enm.namespace = namespace;
-							enm.name = reader.nextToken();
-							if(enm.name.equals("class")) {
-								enm.isClass = true;
-								enm.name = reader.nextToken();
-							}
-							tokens.clear();
-							// will parse opening bracket and potential parent
-							// parser won't stop at the : because its not
-							// preceeded by a switch label or protection level
-							reader.readToNextDelimiter(tokens);
-							
-							CppEnum.BY_NAME.put(enm.name, enm);
-							break;
-						case "struct":
-						case "class":
-							tokens.clear();
-							reader.readToNextDelimiter(tokens);
-							{
-								String end = tokens.removeLast();
-								if("{".equals(end)) {
-									// otherwise it would be ;
-									// indicating a forward declaration
-									itemBeingRead.codeName = tokens.removeFirst();
-									itemBeingRead.jsonName = Utils.toSnakeCase(itemBeingRead.codeName);
-									group = new Group();
-									itemBeingRead.copyInfo(itemBeingRead);
-								}
-							}
-							break;
-						case "namespace":
-							tokens.clear();
-							reader.readToNextDelimiter(tokens);
-							{
-								String end = tokens.removeLast();
-								if("{".equals(end)) {
-									// otherwise it would be ;
-									// indicating a namespace alias(please no)
-									
-									String ns = tokens.removeFirst();
-									namespace = namespace == null ? ns : namespace + "::" + ns;
-									// TODO add namespace identifier to stack along with bracket
-								}
-							}
-							break;
-						default:
-							break;
-					}
-				}
-			}
-		} catch(IOException e) {
-			e.printStackTrace();
-		}
-	}
-	*/
-	
-	private static void writeStructReaders(CppWriter writer) {
-		List<String> allTypes = new ArrayList<>();
-		
-		allTypes.add(mainType);
-		// Not using a foreach so that we can potentially do this
-		// with with a single loop over a continually growing list.
-		for(int i = 0; i < allTypes.size(); i++) {
-			String type = allTypes.get(i);
+	private static void writeStructReaders(IOGrouping io) {
+		boolean wroteAStruct = false;
+		for(String type : io.typesToExport) {
+			// put an empty line between each struct
+			if(wroteAStruct) io.writer.endLine().endLine();
 			
 			Group group = Group.BY_NAME.get(type);
-			if(group == null) {
-				System.err.println("Missing C++ type " + type);
-				System.err.println("All types must exist directly within the input file");
-				return;
-			}
+			group.writeReaderMethod(io.writer);
 			
-			for(SettingOrGroup item : group.items) {
-				if(item.getClass() == Group.class) {
-					Group subgroup = (Group) item;
-					String name = subgroup.typeName;
-					if(name != null && !allTypes.contains(name)) {
-						allTypes.add(name);
-					}
-				}
-			}
+			wroteAStruct = true;
 		}
-		
-		boolean wroteAStruct = false;
-		List<String> dependencies = new ArrayList<>();
-		List<String> writtenTypes = new ArrayList<>();
-		while(!allTypes.isEmpty()) {
-			Iterator<String> iter = allTypes.iterator();
-			while(iter.hasNext()) {
-				String type = iter.next();
-				dependencies.clear();
-				Group group = Group.BY_NAME.get(type);
-				group.getDependencies(dependencies);
-				if(writtenTypes.containsAll(dependencies)) {
-					// put an empty line between each struct
-					if(wroteAStruct) writer.endLine().endLine();
-					
-					group.writeReaderMethod(writer);
-					
-					wroteAStruct = true;
-					iter.remove();
-					writtenTypes.add(type);
-				}
+	}
+	
+	private static void writeConvenienceReaders(IOGrouping io) {
+		CppWriter writer = io.writer;
+		writer.endLine();
+		String pathType = getPathType();
+		boolean wroteAMethod = false;
+		for(String type : io.mainTypes) {
+			// put an empty line between each method
+			if(wroteAMethod) io.writer.endLine().endLine();
+
+			writer.startLine().append("bool escgReadFromFile(const ");
+			writer.append(pathType).reference().append("filename, ").append(type);
+			writer.reference().append("obj)").openBracket().endLine();
+			writer.indent();
+			if(supportFilesystem) {
+				writer.startLine();
+				writer.append("if(!std::filesystem::is_regular_file(filename)) ");
+				writer.append("return false;").endLine();
+			} else {
+				writer.startLine().append("// unable to check if file exists ");
+				writer.append("in platform agnostic way as ");
+				writer.append("std filesystem was not included").endLine();
 			}
+	
+			writer.endLine();
+			
+			writer.startLine().append("std::ifstream stream(filename);").endLine();
+			writer.startLine().append("nlohmann::json data = ");
+			writer.append("nlohmann::json::parse(stream, nullptr, true, true);");
+			writer.endLine();
+			writer.startLine().append("escgRead_").append(type);
+			writer.append("(data, obj);").endLine().endLine();
+			writer.startLine().append("return true;").endLine();
+			
+			writer.unindent();
+			writer.startLine().append('}').endLine();
+
+			wroteAMethod = true;
 		}
-		
-		/* Handling this using a chain of macros in the template instead
-		writer.endLine();
-		writer.append("#define ESCG_READ_MAIN_TYPE(data, obj) escgRead_");
-		writer.append(mainType).append("(data, obj)").endLine();
-		writer.endLine();
-		//*/
 	}
 	
 	private static void writeImguiTab(String tabName,
@@ -522,8 +486,8 @@ public class ESCG {
 		writer.indent();
 		
 		// foreach
-		writer.startLine().append("for(const auto& pair : ").append(mapName);
-		writer.append(')').openBracket().endLine();
+		writer.startLine().append("for(const auto").reference().append("pair : ");
+		writer.append(mapName).append(')').openBracket().endLine();
 		writer.indent();
 		
 		// begin foreach contents
@@ -580,6 +544,13 @@ public class ESCG {
 		}
 	}
 	
+	private static void writeImguiCode(IOGrouping io) {
+		for(String type : io.mainTypes) {
+			Group group = Group.BY_NAME.get(type);
+			writeImguiCode(group, io.writer);
+		}
+	}
+	
 	private static void writeImguiCode(Group main, CppWriter writer) {
 		writer.indent();
 		// technically should be List<Setting>,
@@ -631,15 +602,56 @@ public class ESCG {
 		writer.unindent();
 	}
 	
+	private static void writeWriterCode(IOGrouping io) {
+		boolean wroteAMethod = false;
+		CppWriter writer = io.writer;
+		String pathType = getPathType();
+		for(String type : io.mainTypes) {
+			if(wroteAMethod) writer.endLine();
+			
+			// method to write to json
+			writer.startLine().append("nlohmann::json escgToJson(const ");
+			writer.append(type).reference().append("obj)").openBracket().endLine();
+			
+			writer.indent();
+			writer.startLine().append("nlohmann::json ret").openBracket().endLine();
+			writer.indent();
+			Group group = Group.BY_NAME.get(type);
+			group.writeWriterCode(writer, "obj.", wroteAMethod);
+			writer.unindent();
+			writer.startLine().append("};").endLine();
+			writer.startLine().append("return ret;").endLine();
+			writer.unindent();
+			writer.startLine().append('}').endLine();
+			writer.endLine();
+			
+			// method to write to file
+			writer.startLine().append("void escgWriteToFile(const ").append(pathType);
+			writer.reference().append("path, const ").append(type).reference();
+			writer.append("obj)").openBracket().endLine();
+			writer.indent();
+			writer.startLine().append("nlohmann::json data = escgToJson(obj);").endLine();
+			writer.startLine().append("td::ofstream stream(path);").endLine();
+			writer.startLine().append("stream << data;").endLine();
+			writer.unindent();
+			writer.startLine().append('}').endLine();
+			writer.endLine();
+		}
+	}
+	
 	private static final String PRAGMA_ESCG = "#pragma escg(";
 	
-	private static void createCppFile(Group main) throws IOException {
-		
+	private static void createCppFile(IOGrouping files) throws IOException {
 		String template = Files.readString(new File("code_template.cpp").toPath());
-		CppWriter writer = new CppWriter();
+		CppWriter writer = files.writer;
 		writer.determineLineSeparatorFromReference(template);
 		String[] lines = template.split(writer.lineSeparator);
 		writer.determineIndentFromReference(lines);
+		
+		// allow the user to specify rather than being fully reliant on autodetection
+		if(referenceBefore != null) writer.referenceBefore = referenceBefore;
+		if(newlineBrackets != null) writer.newlineBrackets = newlineBrackets;
+		
 		boolean hadPrevLine = false;
 		for(String line : lines) {
 			if(hadPrevLine) writer.endLine();
@@ -654,17 +666,9 @@ public class ESCG {
 					}
 				}
 				
-				// allow imgui to be supported 
+				// allow imgui to be supported, among other things
 				if(line.startsWith("#include ")) {
-					String lower = line.toLowerCase();
-					if(lower.contains("imgui")) {
-						if(lower.contains("stdlib")) {
-							supportImguiStd = true;
-						} else {							
-							supportImgui = true;
-						}
-					}
-					if(lower.contains(importFile.getName().toLowerCase())) includeImport = false;
+					handleSpecialIncludes(line.substring(9), files);
 				}
 				
 				if(line.startsWith("#define ESCG_IMGUI")) {
@@ -680,17 +684,16 @@ public class ESCG {
 			
 			switch(replacement) {
 				case "includes":
-					writeIncludesAndDefines(writer);
+					writeIncludesAndDefines(files);
 					break;
 				case "serialize":
 				case "write":
-					writer.indent().indent();
-					main.writeWriterCode(writer, "obj.", false);
-					writer.unindent().unindent();
+					writeWriterCode(files);
 					break;
 				case "deserialize":
 				case "read":
-					writeStructReaders(writer);
+					writeStructReaders(files);
+					writeConvenienceReaders(files);
 					break;
 				case "enum":
 				case "enums":
@@ -698,7 +701,7 @@ public class ESCG {
 					break;
 				case "imgui":
 					if(supportImgui) {
-						writeImguiCode(main, writer);
+						writeImguiCode(files);
 					} else {
 						writer.startLine().append("// imgui code excluded. add an imgui import to include it");
 					}
@@ -711,38 +714,78 @@ public class ESCG {
 			hadPrevLine = true;
 		}
 		
-		Files.writeString(outputFile.toPath(), writer.toString());
+		Files.writeString(files.outputFile.toPath(), writer.toString());
+	}
+	
+	private static void writeHeader(IOGrouping io) throws IOException {
+		String pathType = getPathType();
+		
+		final CppWriter writer = io.writer;
+		writer.clear();
+		writer.append("#pragma once").endLine();
+		writer.append("/************************************************").endLine();
+		writer.append(" * THIS FILE IS MACHINE GENERATED. DO NOT EDIT. *").endLine();
+		writer.append(" ************************************************/").endLine();
+		writer.endLine();
+		
+		// included headers
+		if(supportFilesystem) {
+			writer.append("#include <filesystem>").endLine();
+		} else {
+			writer.append("#include <string>").endLine();
+		}
+		writer.append("#include <fstream>").endLine();
+		writeHeaderIncludes(io);
+		if(nlohmannHeader == null) {
+			writer.append("// Nlohmann header was assumed. If this is wrong, Include it in ");
+			writer.append("either an input property or stick it in the template").endLine();
+			writer.append("#include <nlohmann/json.hpp>").endLine();
+		} else {
+			writer.append("#include ").append(nlohmannHeader).endLine();
+		}
+		writer.endLine();
+		
+		for(String mainType : io.mainTypes) {
+			writer.append("// ").append(mainType).append(" -----------").endLine();
+			
+			writer.append("nlohmann::json escgToJson(const ").append(mainType);
+			writer.reference().append("obj);").endLine();
+			
+			writer.append("void escgWriteToFile(const ").append(pathType).reference();
+			writer.append("path, const ").append(mainType).reference().append("obj);").endLine();
+			
+			writer.append("bool escgReadFromFile(const ").append(pathType).reference();
+			writer.append("filename, ").append(mainType).reference().append("obj);").endLine();
+			
+			writer.append("void escgRead_").append(mainType).append("nlohmann::json");
+			writer.reference().append("jsonIn, ").append(mainType).reference();
+			writer.append("structOut);").endLine();
+			
+			writer.endLine();
+		}
+		Files.writeString(io.outputHeader.toPath(), writer.toString());
 	}
 
 	public static void main(String[] args) {
-		if(args == null || args.length != 2) {
-			System.err.println("Need 2 arguments: input_file and main_type");
-			return;
+		IOGrouping files = new IOGrouping();
+		
+		for(String arg : args) {
+			boolean isFile = Utils.isCppFile(arg);
+			if(isFile) files.inputFiles.add(new File(arg));
+			else files.mainTypes.add(arg);
 		}
 		
-		importFile = new File(args[0]);
-		if(!importFile.exists() || !importFile.canRead()) {
-			System.err.println("File specified is not an existing readable file");
-			return;
-		}
+		if(!files.preliminaryValidation()) return;
+
+		importStructs(files);
+		if(!files.lateValidation()) return;
 		
-		mainType = args[1];
-		importStructs();
-		Group main = Group.BY_NAME.get(mainType);
-		if(main == null) {
-			System.err.println("C++ file parsed did not contain the type indicated");
-			return;
-		}
-		
-		File dir = importFile.getParentFile();
-		outputFile = new File(dir, outputName + ".cpp");
 		try {
-			createCppFile(main);
+			createCppFile(files);
+			writeHeader(files);
 		} catch(IOException e) {
 			e.printStackTrace();
 			return;
-		}
-		
-		// TODO potentially write a header as well
+		}		
 	}
 }

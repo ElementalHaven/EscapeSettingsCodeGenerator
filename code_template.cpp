@@ -1,6 +1,6 @@
-/**
- * This file is machine generated. Do not edit.
- */
+/************************************************
+ * THIS FILE IS MACHINE GENERATED. DO NOT EDIT. *
+ ************************************************/
 #include <map>
 #include <string>
 #include <inttypes.h>

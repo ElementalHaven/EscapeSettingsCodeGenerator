@@ -95,13 +95,23 @@ public class CppWriter {
 		int space = 0;
 		int refBefore = 0;
 		for(String line : ref) {
-			int idx = line.indexOf('&');
+			// ignore commented out things
+			int idx = line.indexOf("//");
+			if(idx != -1) line = line.substring(0, idx).stripTrailing();
+			
+			idx = line.indexOf('&');
 			if(idx > 0 && idx < line.length()) {
 				boolean spaceBefore = Character.isWhitespace(line.codePointAt(idx - 1));
 				boolean spaceAfter = Character.isWhitespace(line.codePointAt(idx + 1));
-				if(spaceAfter != spaceBefore) {
-					if(spaceAfter) refBefore++;
-					else refBefore--;
+				
+				// try to exclude lines ending with a semicolon
+				// as that's the best way I can come up with atm
+				// to differentiate the reference operator and reference variables
+				if(line.charAt(line.length() - 1) != ';') {
+					if(spaceAfter != spaceBefore) {
+						if(spaceAfter) refBefore++;
+						else refBefore--;
+					}
 				}
 			}
 			

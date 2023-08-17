@@ -64,21 +64,51 @@ public class Utils {
 	}
 	
 	public static boolean parseBoolean(String value, boolean defaultVal) {
+		return parseBoolean(value, (Boolean) defaultVal);
+	}
+	
+	// exists to support null(aka undefined/error) as a third possibility
+	public static Boolean parseBoolean(String value, Boolean defaultVal) {
 		switch(value.toLowerCase()) {
 			case "1":
 			case "true":
 			case "yes":
 			case "y":
 			case "t":
+			case "on":
 				return true;
 			case "0":
 			case "false":
 			case "no":
 			case "n":
 			case "f":
+			case "off":
 				return false;
 			default:
 				return defaultVal;
 		}
+	}
+	
+	public static boolean isCppFile(String name) {
+		int idx = name.lastIndexOf('.');
+		if(idx == -1) return false;
+		String ext = name.substring(idx + 1).toLowerCase();
+		//* not supporting anything other than headers atm
+		// the files need to be includable by the generated files
+		// and modules are a bit too complicated for this simple generator
+		return "h".equals(ext) || "hpp".equals(ext);
+		/*/
+		switch(ext) {
+			case "h":
+			case "hpp":
+			case "cpp":
+			case "c":
+			case "cc":
+			case "inl":
+			case "ixx":
+				return true;
+		}
+		return false;
+		//*/
 	}
 }

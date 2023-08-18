@@ -1,5 +1,7 @@
 package escg;
 
+import java.awt.Color;
+
 // Despite the documentation on UiTypes for Groups listed here
 // There is currently very little control for them
 public enum UIType {
@@ -21,6 +23,8 @@ public enum UIType {
 	LOGSLIDER,
 	/** A checkbox. Only usable by boolean settings and the default for them */
 	CHECKBOX,
+	/** A color picker without alpha. only usable by string and 32-bit integer settings */
+	COLOR,
 	/**
 	 * A section confined to a tab. usable only by groups.
 	 * The default for groups directly contained by the root object
@@ -82,6 +86,10 @@ public enum UIType {
 					Number.class.isAssignableFrom(setting.javaType);
 			case COMBOBOX:
 				return setting.javaType == Enum.class;
+			case COLOR:
+				return setting.javaType == Integer.class ||
+						setting.javaType == String.class ||
+						setting.javaType == Color.class;
 			default:
 				return false;
 		}

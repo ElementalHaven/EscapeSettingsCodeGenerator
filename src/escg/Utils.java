@@ -1,5 +1,7 @@
 package escg;
 
+import java.awt.Color;
+
 public class Utils {
 	public static String toSnakeCase(String token) {
 		StringBuilder sb = new StringBuilder();
@@ -59,6 +61,9 @@ public class Utils {
 			if(cppType.contains("8")) return Byte.class;
 			
 			return Integer.class;
+		}
+		if(cppType.contains("vec3") || cppType.contains("vec4")) {
+			return Color.class;
 		}
 		return null;
 	}

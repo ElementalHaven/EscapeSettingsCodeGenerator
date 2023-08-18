@@ -64,7 +64,9 @@ public class ESCG {
 		}
 	}
 	
-	private static void handleProperty(String prop, String value, Setting setting, IOGrouping io) {
+	private static void handleProperty(String prop, String value,
+			Setting setting, IOGrouping io)
+	{
 		switch(prop) {
 			// combined ui and exclude
 			case "visibility":
@@ -103,7 +105,16 @@ public class ESCG {
 				break;
 			case "desc":
 			case "description":
-				setting.description = value;
+				if(setting.description == null) {
+					setting.description = value;
+				} else {
+					// support descriptions spanning multiple lines
+					// (any way you want to interpret that)
+					if(!setting.description.endsWith("\n")) {
+						setting.description += ' ';
+					}
+					setting.description += value;
+				}
 				break;
 			case "validator":
 				setting.validatorFunc = value;
@@ -123,7 +134,8 @@ public class ESCG {
 					includes.add(value);
 					handleSpecialIncludes(value, io);
 				} else {
-					System.err.println("Invalid include declaration: " + value + ". Must be enclosed in brackets or quotes");
+					System.err.println("Invalid include declaration: " + value +
+							". Must be enclosed in brackets or quotes");
 				}
 				break;
 			case "parse":
@@ -195,7 +207,9 @@ public class ESCG {
 		}
 	}
 	
-	private static void parsePotentialProperty(Setting setting, String comment, IOGrouping io) {
+	private static void parsePotentialProperty(Setting setting, String comment,
+			IOGrouping io)
+	{
 		String meta = comment.substring(2);
 		int propEnd = meta.indexOf(':');
 		if(propEnd != -1) {
@@ -244,11 +258,11 @@ public class ESCG {
 			SimpleTokenizer line = new SimpleTokenizer();
 			
 			boolean clearSettings = false;
-			int lineNo = 0;
+			//int lineNo = 0;
 			while(scanner.hasNextLine()) {
 				// exists for debugging purposes
 				String initialLine = scanner.nextLine();
-				lineNo++;
+				//lineNo++;
 				
 				line.setLine(initialLine);
 				// empty lines are useless
@@ -439,7 +453,6 @@ public class ESCG {
 	private static void writeImguiSetting(Setting setting,
 			String containerPath, CppWriter writer)
 	{
-		// FIXME add description support
 		String path = containerPath + setting.codeName;
 		UIType uiType = UIType.getType(setting);
 		String flags = "0";
@@ -460,6 +473,11 @@ public class ESCG {
 				writer.append(setting.friendlyName).append("\", &");
 				writer.append(path).append(");").endLine();
 				break;
+			case COLOR:
+				writer.startLine().append("escgInputColor(\"");
+				writer.append(setting.friendlyName).append("\", &");
+				writer.append(path).append(");").endLine();
+				break;
 			case LOGSLIDER:
 				flags = "ImGuiSliderFlags_Logarithmic";
 				// intentional fallthrough
@@ -472,8 +490,20 @@ public class ESCG {
 				break;
 			case COMBOBOX:
 				writeEnumComboBox(setting, path, writer);
-				break;
-				
+				break;	
+		}
+		if(setting.description != null) {
+			writer.startLine().append("if(ImGui::IsItemHovered())").openBracket();
+			writer.endLine();
+			writer.indent();
+			writer.startLine().append("ImGui::BeginTooltip();").endLine();
+			//writer.startLine().append("ImGui::PushTextWrapPos(");
+			//writer.append("ImGui::GetFontSize() * 35.0f);").endLine();
+			writer.startLine().append("ImGui::TextUnformatted(\"");
+			writer.append(setting.description).append("\");").endLine();
+			//writer.startLine().append("ImGui::PopTextWrapPos();").endLine();
+			writer.startLine().append("ImGui::EndTooltip();").endLine();
+			writer.closeBracketLine();
 		}
 	}
 	
@@ -529,14 +559,17 @@ public class ESCG {
 				writer.startLine().append("if(ImGui::");
 				// despite all the group options listed and documented in UiType,
 				// only GROUP and TREE are currently supported
-				writer.append(group.uiType == UIType.GROUP ?
-						"CollapsingHeader" : "TreeNode");
+				boolean isTree = group.uiType != UIType.GROUP;
+				writer.append(isTree ? "TreeNode" : "CollapsingHeader");
 				writer.append("(\"").append(group.friendlyName).append("\"))");
 				writer.openBracket().endLine();
 				
 				String path = containerPath + group.codeName + '.';
 				writer.indent();
 				writeImguiGroupContent(group.items, path, writer);
+				if(isTree) {
+					writer.startLine().append("ImGui::TreePop();").endLine();
+				}
 				writer.closeBracketLine();
 			} else {
 				writeImguiSetting((Setting) item, containerPath, writer);

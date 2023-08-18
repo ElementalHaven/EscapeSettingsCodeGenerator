@@ -147,6 +147,8 @@ public final class Group extends SettingOrGroup {
 					if(setting.javaType == Enum.class) {
 						writer.append("escgEnumV2S_").append(setting.cppType);
 						writer.append('[').append(cppName).append(']');
+					} else if(setting.isConvertibleColor()) {
+						writer.append("escgToColorString(").append(cppName).append(')');
 					} else {
 						writer.append(cppName);
 					}

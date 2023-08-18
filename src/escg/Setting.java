@@ -1,5 +1,7 @@
 package escg;
 
+import java.awt.Color;
+
 public final class Setting extends SettingOrGroup {
 	/**
 	 * Autodetermined from the C++ type in the member declaration<br>
@@ -76,20 +78,30 @@ public final class Setting extends SettingOrGroup {
 		validatorFunc = toCopy.validatorFunc;
 	}
 	
+	boolean isConvertibleColor() {
+		return uiType == UIType.COLOR &&
+				(javaType == Integer.class || javaType == Color.class);
+	}
+	
 	public void writerReaderCode(CppWriter writer, String jsonName, String fullStructName) {
 		writer.startLine();
-		writer.append(fullStructName).append(" = ");
-		if(javaType == Enum.class) {
-			writer.append("escgEnumS2V_").append(cppType);
-			writer.append('(').append(jsonName).append(".get<std::string>())");
-			/* everything not an enum should be handlable by the template conversion itself
-		} else if(javaType == String.class) {
-			writer.append(jsonName).append(".get<std::string>()");
-		} else if(javaType == Boolean.class) {
-			writer.append(jsonName).append(".get<bool>()");
-			//*/
+		if(isConvertibleColor()) {
+			writer.append("escgFromColorString(").append(jsonName);
+			writer.append(".get<std::string>(), ").append(fullStructName).append(')');
 		} else {
-			writer.append(jsonName).append(".get<").append(cppType).append(">()");
+			writer.append(fullStructName).append(" = ");
+			if(javaType == Enum.class) {
+				writer.append("escgEnumS2V_").append(cppType);
+				writer.append('(').append(jsonName).append(".get<std::string>())");
+				/* everything not an enum should be handlable by the template conversion itself
+			} else if(javaType == String.class) {
+				writer.append(jsonName).append(".get<std::string>()");
+			} else if(javaType == Boolean.class) {
+				writer.append(jsonName).append(".get<bool>()");
+				//*/
+			} else {
+				writer.append(jsonName).append(".get<").append(cppType).append(">()");
+			}
 		}
 		writer.append(';').endLine();
 	}

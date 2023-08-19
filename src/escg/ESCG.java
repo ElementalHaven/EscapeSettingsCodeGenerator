@@ -110,7 +110,7 @@ public class ESCG {
 				} else {
 					// support descriptions spanning multiple lines
 					// (any way you want to interpret that)
-					if(!setting.description.endsWith("\n")) {
+					if(!setting.description.endsWith("\\n")) {
 						setting.description += ' ';
 					}
 					setting.description += value;
@@ -458,23 +458,23 @@ public class ESCG {
 		String flags = "0";
 		switch(uiType) {
 			case CHECKBOX:
-				writer.startLine().append("ImGui::Checkbox(\"");
+				writer.startLine().append("modified |= ImGui::Checkbox(\"");
 				writer.append(setting.friendlyName).append("\", &");
 				writer.append(path).append(");").endLine();
 				break;
 			case TEXT:
 			case FILE:
-				writer.startLine().append("ImGui::InputText(\"");
+				writer.startLine().append("modified |= ImGui::InputText(\"");
 				writer.append(setting.friendlyName).append("\", &");
 				writer.append(path).append(");").endLine();
 				break;
 			case NUMBER:
-				writer.startLine().append("escgInputNumber(\"");
+				writer.startLine().append("modified |= escgInputNumber(\"");
 				writer.append(setting.friendlyName).append("\", &");
 				writer.append(path).append(");").endLine();
 				break;
 			case COLOR:
-				writer.startLine().append("escgInputColor(\"");
+				writer.startLine().append("modified |= escgInputColor(\"");
 				writer.append(setting.friendlyName).append("\", &");
 				writer.append(path).append(");").endLine();
 				break;
@@ -482,7 +482,7 @@ public class ESCG {
 				flags = "ImGuiSliderFlags_Logarithmic";
 				// intentional fallthrough
 			case SLIDER:
-				writer.startLine().append("escgInputSlider(\"");
+				writer.startLine().append("modified |= escgInputSlider(\"");
 				writer.append(setting.friendlyName).append("\", &");
 				writer.append(path).append(", ").append(setting.minValue);
 				writer.append(", ").append(setting.maxValue).append(", ");
@@ -532,6 +532,7 @@ public class ESCG {
 		writer.openBracket().endLine();
 		writer.indent();
 		writer.startLine().append(path).append(" = pair.first;").endLine();
+		writer.startLine().append("modified = true;").endLine();
 		writer.closeBracketLine();
 		
 		writer.startLine().append("if(selected)").openBracket().endLine();
@@ -585,19 +586,21 @@ public class ESCG {
 			
 			Group group = Group.BY_NAME.get(type);
 
-			writer.startLine().append("void escgShowUI(").append(type);
+			writer.startLine().append("bool escgShowUI(").append(type);
 			writer.reference().append("obj, bool* open)").openBracket().endLine();
 			writer.indent();
 			writer.startLine().append("if(!ImGui::Begin(\"Settings\", open))");
 			writer.openBracket().endLine();
 			writer.indent();
 			writer.startLine().append("ImGui::End();").endLine();
-			writer.startLine().append("return;").endLine();
+			writer.startLine().append("return false;").endLine();
 			writer.closeBracketLine().endLine();
+			writer.startLine().append("bool modified = false;").endLine();
 			
 			writeImguiCode(group, writer);
 			
 			writer.startLine().append("ImGui::End();").endLine();
+			writer.startLine().append("return modified;").endLine();
 			writer.closeBracketLine();
 		}
 	}
@@ -808,7 +811,7 @@ public class ESCG {
 			writer.append("structOut);").endLine();
 			
 			if(supportImgui) {
-				writer.append("void escgShowUI(").append(mainType).reference();
+				writer.append("bool escgShowUI(").append(mainType).reference();
 				writer.append("obj, bool* open = nullptr);").endLine();
 			}
 		}

@@ -7,7 +7,10 @@
 #pragma escg(includes)
 
 #define COL_SCALE float(UINT8_MAX)
-#if __cplusplus >= 201103L
+// if you're using MSVC, you have to go to Config -> C/C++ -> Command Line
+// and add "/Zc:__cplusplus" to additional options
+// or else __cplusplus will always be 197711L
+#if __cplusplus >= 201103L || (defined(_MSC_VER) && _MSC_VER >= 1900)
 #define ESCG_CONSTEXPR constexpr
 #else
 #define ESCG_CONSTEXPR const

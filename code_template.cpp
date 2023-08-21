@@ -18,12 +18,12 @@
 
 static std::string escgToColorString(int32_t col) {
 	static char buf[8];
-	sprintf_s(buf, "#%06X", col);
+	sprintf_s(buf, "#%06X", col & 0xFFFFFF);
 	return buf;
 }
 static std::string escgToColorString(uint32_t col) {
 	static char buf[8];
-	sprintf_s(buf, "#%06X", col);
+	sprintf_s(buf, "#%06X", col & 0xFFFFFFu);
 	return buf;
 }
 static std::string escgToColorString(float* col) {

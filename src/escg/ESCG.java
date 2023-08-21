@@ -532,7 +532,7 @@ public class ESCG {
 		writer.openBracket().endLine();
 		writer.indent();
 		writer.startLine().append(path).append(" = pair.first;").endLine();
-		writer.startLine().append("modified = true;").endLine();
+		writer.startLine().append("modified |= !selected;").endLine();
 		writer.closeBracketLine();
 		
 		writer.startLine().append("if(selected)").openBracket().endLine();

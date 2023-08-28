@@ -105,10 +105,10 @@ public class SimpleTokenizer {
 		return token;
 	}
 	
-	void finishParsingMember(Setting setting) {
+	void finishParsingMember(SettingOrGroup item) {
 		String name = nextComplexToken(':', '=', ';');
-		setting.setName(name);
-		if(line.isEmpty()) return;
+		item.setName(name);
+		if(line.isEmpty() || item.getClass() != Setting.class) return;
 		char next = line.charAt(0);
 		if(next == ':') { // bitfield
 			line = line.substring(1).stripLeading();
@@ -121,13 +121,15 @@ public class SimpleTokenizer {
 
 		int idx = line.lastIndexOf(';');
 		String defVal =  line.substring(1, idx).trim();
-		setting.defaultValue = defVal;
+		((Setting) item).defaultValue = defVal;
 	}
 	
 	void finishParsingNamedClass(Group group) {
 		String typeName = nextComplexToken(':', '{');
-		group.typeName = typeName;
-		Group.BY_NAME.put(typeName, group);
+		if(!typeName.isEmpty()) {
+			group.typeName = typeName;
+			Group.BY_NAME.put(typeName, group);
+		}
 		// we only care about the below for determining parent
 		if(line.isEmpty() || line.charAt(0) != ':') return;
 		

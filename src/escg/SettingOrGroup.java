@@ -65,8 +65,8 @@ public class SettingOrGroup {
 		// these 2 are probably unnecessary
 		// as they are determined from
 		// the line that triggers the copy operation
-		codeName = toCopy.codeName;
-		jsonName = toCopy.jsonName;
+		//codeName = toCopy.codeName;
+		//jsonName = toCopy.jsonName;
 		
 		friendlyName = toCopy.friendlyName;
 		description = toCopy.description;

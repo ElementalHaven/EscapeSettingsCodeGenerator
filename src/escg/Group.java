@@ -112,12 +112,14 @@ public final class Group extends SettingOrGroup {
 		}
 	}
 	
-	public void writeWriterCode(CppWriter writer, String memberPrefix, boolean contentBefore) {
+	public void writeWriterCode(CppWriter writer, String memberPrefix) {
+		boolean contentBefore = false;
 		if(!parentTypes.isEmpty()) {
 			for(Group parent : parentTypes) {
 				if(parent.isEmpty()) continue;
 				
-				writeWriterCode(writer, memberPrefix, contentBefore);
+				if(contentBefore) writer.append(',').endLine();
+				parent.writeWriterCode(writer, memberPrefix);
 				contentBefore = true;
 			}
 		}
@@ -137,7 +139,8 @@ public final class Group extends SettingOrGroup {
 					if(!group.isEmpty()) {
 						writer.endLine();
 						writer.indent();
-						group.writeWriterCode(writer, cppName + '.', false);
+						group.writeWriterCode(writer, cppName + '.');
+						writer.endLine();
 						writer.unindent();
 						writer.startLine();
 					}
@@ -157,7 +160,7 @@ public final class Group extends SettingOrGroup {
 				contentBefore = true;
 			}
 		}
-		if(contentBefore) writer.endLine();
+		//if(contentBefore) writer.endLine();
 	}
 	
 	public boolean isEmpty() {
@@ -189,6 +192,7 @@ public final class Group extends SettingOrGroup {
 			if(item.getClass() == Group.class) {
 				Group group = (Group) item;
 				addDependency(group.typeName, typeDependencies);
+				group.getDependencies(typeDependencies, enumDependencies);
 			} else {
 				Setting setting = (Setting) item;
 				if(setting.javaType == Enum.class) {
@@ -207,5 +211,31 @@ public final class Group extends SettingOrGroup {
 			if(item.uiType != UIType.NONE) filtered.add(item);
 		}
 		return filtered;
+	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder("struct");
+		if(typeName != null) {
+			sb.append(' ').append(typeName);
+		}
+		if(!parentTypes.isEmpty()) {
+			boolean wroteOne = false;
+			sb.append(" : ");
+			for(Group parent : parentTypes) {
+				if(wroteOne) sb.append(", ");
+				sb.append("public ").append(parent.typeName == null ?
+						"<anonymous>" : parent.typeName);
+				wroteOne = true;
+			}
+		}
+		int itemCount = items.size();
+		sb.append('[').append(itemCount).append(" item");
+		if(itemCount != 1) sb.append('s');
+		sb.append(']');
+		if(codeName != null) {
+			sb.append(' ').append(codeName);
+		}
+		return sb.toString();
 	}
 }

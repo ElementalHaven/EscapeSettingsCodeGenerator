@@ -291,6 +291,7 @@ public class ESCG {
 				// so we can have these characters in the metadata
 				if(line.hasBadCharacters()) continue;
 				
+				boolean notAStruct = true;
 				if(!hierarchy.isEmpty()) {
 					switch(token) {
 						case "public:":
@@ -325,20 +326,22 @@ public class ESCG {
 								continue;
 							}
 							token = line.nextSimpleToken();
-							if(token.equals("struct")) {
-								// anonymous structs might be more complex than this,
-								// but if so, I'm not supporting that stuff
-								Group group = new Group();
-								group.copyInfo(itemBeingRead);
-								hierarchy.push(group);
-								continue;
-							} else {
-								Setting setting = new Setting();
-								setting.copyInfo(itemBeingRead);
-								setting.setType(token);
-								line.finishParsingMember(setting);
+							notAStruct = !token.equals("struct") && !token.equals("class");
+							if(notAStruct) {
+								Group group = Group.BY_NAME.get(token);
+								SettingOrGroup item = null;
+								if(group != null) {
+									item = group.clone();
+								} else {
+									Setting setting = new Setting();
+									setting.setType(token);
+									item = setting;
+								}
+								item.copyInfo(itemBeingRead);
+								line.finishParsingMember(item);
+								
 								Group parent = hierarchy.peek();
-								if(parent.currentlyPublic) parent.items.add(setting);
+								if(parent.currentlyPublic) parent.items.add(item);
 								continue;
 							}
 					}
@@ -366,7 +369,9 @@ public class ESCG {
 				}
 				
 				boolean isStruct = false;
-				token = line.nextSimpleToken();
+				if(notAStruct) {
+					token = line.nextSimpleToken();
+				}
 				switch(token) {
 					case "namespace":
 						System.err.println("Namespaces not currently supported");
@@ -437,14 +442,15 @@ public class ESCG {
 		}
 	}
 	
-	private static void writeImguiTab(String tabName,
-			List<SettingOrGroup> items, String containerPath, CppWriter writer)
+	private static void writeImguiTab(
+			Group group, String containerPath, CppWriter writer)
 	{
-		writer.startLine().append("if(ImGui::BeginTabItem(\"").append(tabName);
+		writer.startLine().append("if(ImGui::BeginTabItem(\"");
+		writer.append(group.friendlyName);
 		writer.append("\"))").openBracket().endLine();
 
 		writer.indent();
-		writeImguiGroupContent(items, containerPath, writer);
+		writeImguiGroupContent(group, containerPath, writer);
 		writer.startLine().append("ImGui::EndTabItem();").endLine();
 
 		writer.closeBracketLine();
@@ -548,9 +554,13 @@ public class ESCG {
 		writer.closeBracketLine();
 	}
 	
-	private static void writeImguiGroupContent(List<SettingOrGroup> items,
+	private static void writeImguiGroupContent(Group container,
 			String containerPath, CppWriter writer)
 	{
+		for(Group parent : container.parentTypes) {
+			writeImguiGroupContent(parent, containerPath, writer);
+		}
+		List<SettingOrGroup> items = container.visibleItems();
 		for(SettingOrGroup item : items) {
 			if(item.uiType == UIType.NONE) continue;
 			
@@ -567,7 +577,7 @@ public class ESCG {
 				
 				String path = containerPath + group.codeName + '.';
 				writer.indent();
-				writeImguiGroupContent(group.items, path, writer);
+				writeImguiGroupContent(group, path, writer);
 				if(isTree) {
 					writer.startLine().append("ImGui::TreePop();").endLine();
 				}
@@ -610,31 +620,32 @@ public class ESCG {
 		// but it doesn't provide any benefit
 		// and just complicates the generic parameters
 		List<SettingOrGroup> filtered = main.visibleItems();
-		List<SettingOrGroup> general = new ArrayList<>(main.items.size());
+		Group general = new Group();
+		general.friendlyName = "General";
 		// I'll keep the lambda for now in case I decide to go back to Streams
 		int mainCount = filtered.size();
 		filtered.forEach(item -> {
 			if(item.getClass() == Setting.class) {
-				general.add(item);
+				general.items.add(item);
 			}
 		});
 		// don't create a general tab if there's no settings in the root object
 		boolean noGeneral = general.isEmpty();
 		// don't create tabs if there are no substructs,
 		// or if the root only consists of a single substruct
-		boolean useTabs = noGeneral ? mainCount > 1 : general.size() < mainCount;
+		boolean useTabs = noGeneral ? mainCount > 1 : general.items.size() < mainCount;
 		if(useTabs) {
 			writer.startLine().append("if(ImGui::BeginTabBar(\"Tabs\"))");
 			writer.openBracket().endLine();
 			writer.indent();
 			if(!noGeneral) {
-				writeImguiTab("General", general, "obj.", writer);
+				writeImguiTab(general, "obj.", writer);
 			}
 			for(SettingOrGroup item : filtered) {
 				if(item.getClass() == Group.class) {
 					Group group = (Group) item;
 					String path = "obj." + group.codeName + '.';
-					writeImguiTab(group.friendlyName, group.visibleItems(), path, writer);
+					writeImguiTab(group, path, writer);
 				}
 			}
 			writer.startLine().append("ImGui::EndTabBar();").endLine();
@@ -645,7 +656,7 @@ public class ESCG {
 				// a single Group object and nothing else
 				Group group = (Group) main.items.get(0);
 				String path = "obj." + group.codeName + '.';
-				writeImguiGroupContent(group.items, path, writer);
+				writeImguiGroupContent(group, path, writer);
 			} else {
 				// !useTabs && !noGeneral dictates main.items only consists settings
 				writeImguiGroupContent(general, "obj.", writer);
@@ -668,7 +679,8 @@ public class ESCG {
 			writer.startLine().append("nlohmann::json ret").openBracket().endLine();
 			writer.indent();
 			Group group = Group.BY_NAME.get(type);
-			group.writeWriterCode(writer, "obj.", wroteAMethod);
+			group.writeWriterCode(writer, "obj.");
+			writer.endLine();
 			writer.unindent();
 			writer.startLine().append("};").endLine();
 			writer.startLine().append("return ret;").endLine();

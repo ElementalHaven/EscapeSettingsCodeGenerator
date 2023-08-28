@@ -68,8 +68,8 @@ public final class Setting extends SettingOrGroup {
 	public void copyInfo(Setting toCopy) {
 		super.copyInfo(toCopy);
 		
-		javaType = toCopy.javaType;
-		cppType = toCopy.cppType;
+		//javaType = toCopy.javaType;
+		//cppType = toCopy.cppType;
 		
 		minValue = toCopy.minValue;
 		maxValue = toCopy.maxValue;

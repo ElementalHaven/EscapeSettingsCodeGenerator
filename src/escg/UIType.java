@@ -10,7 +10,7 @@ public enum UIType {
 	NONE,
 	/** A textbox. the default for strings */
 	TEXT,
-	/** Just a textbox because I thought there was a specialized type when there wasnt */
+	/** Just a textbox because I thought there was a specialized type when there wasn't */
 	FILE,
 	/**
 	 * A number with increment and decrement buttons.

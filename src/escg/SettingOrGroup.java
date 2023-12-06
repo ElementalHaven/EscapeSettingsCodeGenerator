@@ -17,7 +17,7 @@ public class SettingOrGroup {
 	public String	jsonName;
 	/**
 	 * Specified with the parameter {@code name:}<br>
-	 * The name of the struct member as it will appear
+	 * The name of the struct member as it will appear 
 	 * in UIs or console/log messages.<br>
 	 * While optional, setting this is highly recommended.
 	 * If not present, jsonName will be used in its place.

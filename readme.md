@@ -81,7 +81,7 @@ Annotations meant for member variables apply only to the next line that isn't an
 	&emsp;A boolean value controlling whether or not this member is present in the JSON. All public member variables default to true.
 - **validator**  
 	&emsp;The name of a user-defined global function that will be used to validate the member.  
-	[!WARNING] This feature is currently unimplemented and has no format or syntax defined.
+	> ⚠️ **Warning** - This feature is currently unimplemented and has no format or syntax defined.
 
 ### Formatting Annotations
 - **ref**  

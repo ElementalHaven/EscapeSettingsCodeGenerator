@@ -12,12 +12,13 @@ public class Utils {
 		for(int i = 0; i < len; i++) {
 			char c = token.charAt(i);
 			char lower = Character.toLowerCase(c);
-			if(c != lower) {
+			boolean isCaps = c != lower; 
+			if(isCaps) {
 				if(!lastWasCaps) {
 					sb.append('_');
 				}
-				lastWasCaps = true;
 			}
+			lastWasCaps = isCaps;
 			
 			sb.append(lower);
 		}

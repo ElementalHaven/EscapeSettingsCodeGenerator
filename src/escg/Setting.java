@@ -92,7 +92,7 @@ public final class Setting extends SettingOrGroup {
 			writer.append(fullStructName).append(" = ");
 			if(javaType == Enum.class) {
 				writer.append("escgEnumS2V_").append(cppType);
-				writer.append('(').append(jsonName).append(".get<std::string>())");
+				writer.append('[').append(jsonName).append(".get<std::string>()]");
 				/* everything not an enum should be handlable by the template conversion itself
 			} else if(javaType == String.class) {
 				writer.append(jsonName).append(".get<std::string>()");

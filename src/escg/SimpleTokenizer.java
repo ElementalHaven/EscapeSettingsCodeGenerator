@@ -46,7 +46,7 @@ public class SimpleTokenizer {
 	}
 	
 	private void trimEnumTrailing(int start) {
-		int idx = Math.min(line.indexOf(',', start) + 1, start);
+		int idx = Math.max(line.indexOf(',', start) + 1, start);
 		line = line.substring(idx).stripLeading();
 	}
 	

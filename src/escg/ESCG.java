@@ -346,7 +346,7 @@ public class ESCG {
 							}
 					}
 				} else if(enm != null) {
-					if(token.equals("}")) {
+					if(token.startsWith("}")) {
 						enm = null;
 						continue;
 					} else {

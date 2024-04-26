@@ -44,7 +44,7 @@ public class CppEnum {
 		
 		// opening
 		writer.startLine().append("static std::map<std::string, ").append(fqName);
-		writer.append(">> ").append(mapName).append(" {").endLine();
+		writer.append("> ").append(mapName).append(" {").endLine();
 		
 		// values
 		if(!values.isEmpty()) {
@@ -69,7 +69,7 @@ public class CppEnum {
 		
 		// opening
 		writer.startLine().append("static std::map<").append(fqName);
-		writer.append(", std::string>> ").append(mapName).append(" {").endLine();
+		writer.append(", std::string> ").append(mapName).append(" {").endLine();
 		
 		// values
 		if(!values.isEmpty()) {
@@ -79,7 +79,7 @@ public class CppEnum {
 				writer.startLine().append("{ ");
 				if(isClass) writer.append(fqName).append("::");
 				writer.append(value).append(", \"");
-				writer.append(value.toLowerCase()).append(" }");
+				writer.append(value.toLowerCase()).append("\" }");
 				if(value != last) writer.append(',');
 				writer.endLine();
 			}
@@ -96,7 +96,7 @@ public class CppEnum {
 		
 		// opening
 		writer.startLine().append("static std::unordered_map<").append(fqName);
-		writer.append(", std::string>> ").append(mapName).append(" {").endLine();
+		writer.append(", std::string> ").append(mapName).append(" {").endLine();
 		
 		// values
 		if(!values.isEmpty()) {
@@ -106,7 +106,7 @@ public class CppEnum {
 				writer.startLine().append("{ ");
 				if(isClass) writer.append(fqName).append("::");
 				writer.append(pair.getKey()).append(", \"");
-				writer.append(pair.getValue()).append(" }");
+				writer.append(pair.getValue()).append("\" }");
 				if(pair.getKey() != last) writer.append(',');
 				writer.endLine();
 			}

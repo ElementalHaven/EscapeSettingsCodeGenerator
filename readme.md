@@ -4,7 +4,7 @@ Utility for generating code to read and write structs to and from JSON, along wi
 
 ## Requirements
 
-Requires JDK 8 or newer to build / Java 8 or newer to run
+Requires JDK 11 or newer to build / Java 11 or newer to run
 
 ## Program Syntax
 
